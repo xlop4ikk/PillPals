@@ -1,0 +1,41 @@
+{
+  "name": "Пилюлькин День — напоминания о таблетках",
+  "short_name": "Пилюлькин День",
+  "description": "Весёлый помощник, который напоминает о приёме таблеток каждый день.",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF3E0",
+  "theme_color": "#FF8A50",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["health", "medical", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Добавить таблетку",
+      "short_name": "Добавить",
+      "url": "./index.html?action=add"
+    }
+  ]
+}
