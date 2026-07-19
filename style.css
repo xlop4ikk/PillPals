@@ -63,10 +63,10 @@ html, body {
   0%, 92%, 100% { transform: scaleY(1); }
   95% { transform: scaleY(0.1); }
 }
-.brand-text { min-width: 0; }
+.brand-text { min-width: 0; flex: 1; }
 .brand-text h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: clamp(0.98rem, 4.2vw, 1.5rem);
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -74,7 +74,7 @@ html, body {
 }
 .tagline {
   margin: 2px 0 0;
-  font-size: 0.78rem;
+  font-size: clamp(0.7rem, 2.9vw, 0.8rem);
   opacity: 0.9;
   white-space: nowrap;
   overflow: hidden;
@@ -83,20 +83,26 @@ html, body {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 .streak-badge {
   background: rgba(255,255,255,0.22);
-  padding: 5px 10px;
+  padding: 5px 9px;
   border-radius: 999px;
-  font-size: 0.85rem;
+  font-size: clamp(0.72rem, 3vw, 0.85rem);
   font-weight: 700;
+  white-space: nowrap;
 }
 .progress-ring {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: clamp(42px, 14vw, 56px);
+  height: clamp(42px, 14vw, 56px);
+  flex-shrink: 0;
+}
+.progress-ring svg {
+  width: 100%;
+  height: 100%;
 }
 .ring-text {
   position: absolute;
@@ -104,10 +110,11 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
+  font-size: clamp(0.6rem, 2.6vw, 0.72rem);
   font-weight: 700;
   color: #fff;
 }
+.mascot svg { width: clamp(42px, 12vw, 56px); height: auto; }
 
 /* ===== Календарь ===== */
 .calendar-wrap {
@@ -490,6 +497,42 @@ html, body {
 }
 .modal-actions .btn { flex: 1; }
 
+/* Сетка выбора типа лекарства */
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+.type-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 2px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--blue-lighter);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition: all 0.15s ease;
+  text-align: center;
+}
+.type-opt .ticon { font-size: 1.3rem; line-height: 1; }
+.type-opt:active { transform: scale(0.94); }
+.type-opt.selected {
+  border-color: var(--blue);
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+
+/* Инструкция по установке */
+.install-sub { margin: 8px 0 2px; font-weight: 700; color: var(--ink); }
+.install-help ol { padding-left: 18px; margin: 4px 0; }
+.install-note { margin-top: 8px; font-size: 0.82rem; color: var(--muted); font-style: italic; }
+
 /* ===== Toast ===== */
 .toast {
   position: fixed;
@@ -520,4 +563,13 @@ html, body {
   .brand-text h1 { font-size: 1.5rem; }
   .modal { align-items: center; }
   .modal-card { border-radius: 22px; }
+}
+
+/* Очень узкие экраны: позволяем подписи переноситься */
+@media (max-width: 380px) {
+  .header-row { flex-wrap: wrap; }
+  .header-right { order: 2; }
+  .brand { flex: 1 1 100%; }
+  .tagline { white-space: normal; }
+  .type-grid { grid-template-columns: repeat(3, 1fr); }
 }

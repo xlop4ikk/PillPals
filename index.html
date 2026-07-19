@@ -80,13 +80,22 @@
   <section class="install-section">
     <button class="btn btn-ghost" id="installBtn" hidden>📱 Добавить на рабочий стол</button>
     <details class="install-help">
-      <summary>Как добавить на рабочий стол Android?</summary>
+      <summary>Как добавить приложение на рабочий стол?</summary>
+      <p class="install-sub"><b>📱 На Android (Chrome):</b></p>
       <ol>
-        <li>Открой приложение в <b>Chrome</b> на Android.</li>
-        <li>Нажми меню (три точки в правом верхнем углу).</li>
+        <li>Открой приложение в <b>Chrome</b>.</li>
+        <li>Нажми меню (три точки ⋮ в правом верхнем углу).</li>
         <li>Выбери <b>«Добавить на главный экран»</b> (или «Установить приложение»).</li>
         <li>Подтверди — иконка появится на рабочем столе.</li>
       </ol>
+      <p class="install-sub"><b>🍎 На iPhone / iPad (Safari):</b></p>
+      <ol>
+        <li>Открой приложение в браузере <b>Safari</b> (в Chrome на iOS это не работает).</li>
+        <li>Нажми кнопку <b>«Поделиться»</b> (квадрат со стрелочкой вверх ↗ внизу экрана).</li>
+        <li>Прокрути список и выбери <b>«На экран „Домой"»</b>.</li>
+        <li>Нажми <b>«Добавить»</b> — иконка появится на рабочем столе.</li>
+      </ol>
+      <p class="install-note">После установки приложение открывается на весь экран без адресной строки и работает как настоящее приложение.</p>
     </details>
   </section>
 
@@ -104,7 +113,10 @@
   <!-- ===== Модальное окно ===== -->
   <div class="modal" id="modal" hidden>
     <div class="modal-card">
-      <h2 id="modalTitle">Новая таблетка</h2>
+      <h2 id="modalTitle">Новое лекарство</h2>
+      <label>Тип лекарства
+        <div class="type-grid" id="typeGrid"></div>
+      </label>
       <label>Название
         <input type="text" id="nameInput" placeholder="Напр. Витамин D" maxlength="40" />
       </label>

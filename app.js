@@ -23,6 +23,23 @@
   const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
   const DOW = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
 
+  // Типы лекарств
+  const MED_TYPES = {
+    tablet:  { icon: "💊", label: "Таблетка" },
+    capsule: { icon: "💊", label: "Капсула" },
+    shot:    { icon: "💉", label: "Укол" },
+    mix:     { icon: "🧪", label: "Смесь" },
+    syrup:   { icon: "🥤", label: "Сироп" },
+    drops:   { icon: "💧", label: "Капли" },
+    ointment:{ icon: "🧴", label: "Мазь" },
+    powder:  { icon: "⚗️", label: "Порошок" },
+    inhaler: { icon: "🌬️", label: "Ингалятор" },
+    spray:   { icon: "💦", label: "Спрей" },
+    other:   { icon: "❤️", label: "Другое" },
+  };
+  function typeIcon(t) { return (MED_TYPES[t] && MED_TYPES[t].icon) || "💊"; }
+  function typeLabel(t) { return (MED_TYPES[t] && MED_TYPES[t].label) || "Лекарство"; }
+
   // DOM
   const $ = (id) => document.getElementById(id);
   const listEl = $("list");
@@ -43,10 +60,12 @@
   const ringText = $("ringText");
   const summaryText = $("summaryText");
   const summaryFill = $("summaryFill");
+  const typeGrid = $("typeGrid");
 
   let editingId = null;
   let deferredPrompt = null;
   let selectedDate = todayStr(); // выбранная в календаре дата
+  let selectedType = "tablet";   // выбранный тип лекарства в модалке
 
   /* ---------- Utils ---------- */
   function uid() {
@@ -234,7 +253,7 @@
 
       const icon = document.createElement("div");
       icon.className = "pill-icon";
-      icon.textContent = taken ? "✅" : "💊";
+      icon.textContent = taken ? "✅" : typeIcon(p.type);
 
       const info = document.createElement("div");
       info.className = "info";
@@ -243,12 +262,15 @@
       name.textContent = p.name || "Без названия";
       const meta = document.createElement("p");
       meta.className = "meta";
-      meta.textContent = p.dose ? p.dose : "";
+      const parts = [];
+      if (p.type && p.type !== "other") parts.push(typeLabel(p.type));
+      if (p.dose) parts.push(p.dose);
+      meta.textContent = parts.join(" · ");
       const time = document.createElement("span");
       time.className = "time";
       time.textContent = "⏰ " + (p.time || "--:--");
       info.appendChild(name);
-      if (p.dose) info.appendChild(meta);
+      if (parts.length) info.appendChild(meta);
       info.appendChild(time);
 
       const actions = document.createElement("div");
@@ -334,6 +356,25 @@
   }
 
   /* ---------- Модальное окно ---------- */
+  function buildTypeGrid() {
+    typeGrid.innerHTML = "";
+    Object.keys(MED_TYPES).forEach(key => {
+      const t = MED_TYPES[key];
+      const opt = document.createElement("div");
+      opt.className = "type-opt";
+      opt.dataset.type = key;
+      opt.innerHTML = '<span class="ticon">' + t.icon + "</span><span>" + t.label + "</span>";
+      opt.addEventListener("click", () => selectType(key));
+      typeGrid.appendChild(opt);
+    });
+  }
+  function selectType(key) {
+    selectedType = key;
+    typeGrid.querySelectorAll(".type-opt").forEach(el => {
+      el.classList.toggle("selected", el.dataset.type === key);
+    });
+  }
+
   function openModal(id) {
     editingId = id || null;
     if (id) {
@@ -342,13 +383,15 @@
       nameInput.value = p.name || "";
       doseInput.value = p.dose || "";
       timeInput.value = p.time || "";
+      selectType(p.type || "tablet");
     } else {
-      modalTitle.textContent = "Новая таблетка";
+      modalTitle.textContent = "Новое лекарство";
       nameInput.value = "";
       doseInput.value = "";
       const d = new Date();
       d.setHours(d.getHours() + 1, 0, 0, 0);
       timeInput.value = pad(d.getHours()) + ":00";
+      selectType("tablet");
     }
     modal.hidden = false;
     setTimeout(() => nameInput.focus(), 50);
@@ -358,14 +401,14 @@
     const name = nameInput.value.trim();
     const dose = doseInput.value.trim();
     const time = timeInput.value;
-    if (!name) { showToast("Введи название таблетки 🙏"); nameInput.focus(); return; }
+    if (!name) { showToast("Введи название лекарства 🙏"); nameInput.focus(); return; }
     if (!time) { showToast("Выбери время ⏰"); return; }
     const pills = loadData();
     if (editingId) {
       const p = pills.find(x => x.id === editingId);
-      p.name = name; p.dose = dose; p.time = time;
+      p.name = name; p.dose = dose; p.time = time; p.type = selectedType;
     } else {
-      pills.push({ id: uid(), name, dose, time, takenDates: {}, lastNotified: null });
+      pills.push({ id: uid(), name, dose, time, type: selectedType, takenDates: {}, lastNotified: null });
     }
     saveData(pills);
     closeModal();
@@ -397,7 +440,7 @@
     try { reg = await navigator.serviceWorker.ready; } catch {}
     const title = "💊 Пилюлькин напоминает!";
     const options = {
-      body: "Пора принять: " + pill.name + (pill.dose ? " (" + pill.dose + ")" : "") + " — не забывай, а то они обидятся! 😄",
+      body: typeIcon(pill.type) + " " + pill.name + (pill.dose ? " — " + pill.dose : "") + ". Не забывай, а то они обидятся! 😄",
       icon: "icons/icon-192.png",
       badge: "icons/icon-192.png",
       tag: "pill-" + pill.id,
@@ -499,6 +542,7 @@
     document.addEventListener("touchstart", askOnce, { once: true });
 
     registerSW();
+    buildTypeGrid();
     rotateTagline();
     render();
     updateBlockedInfo();
