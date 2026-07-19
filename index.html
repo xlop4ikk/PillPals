@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#FF8A50" />
-  <meta name="description" content="Пилюлькин День — весёлый помощник для напоминаний о приёме таблеток." />
+  <meta name="theme-color" content="#3B9AE1" />
+  <meta name="description" content="Пилюлькин День — дружелюбный помощник для напоминаний о приёме лекарств." />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -16,66 +16,83 @@
   <title>Пилюлькин День 💊</title>
 </head>
 <body>
-  <!-- Анимированный персонаж -->
-  <div class="mascot" id="mascot" aria-hidden="true">
-    <svg viewBox="0 0 120 80" width="120" height="80">
-      <!-- левая (оранжевая) половина капсулы -->
-      <path d="M10 40 a30 30 0 0 1 30 -30 h20 v60 h-20 a30 30 0 0 1 -30 -30 z" fill="#FF8A50" stroke="#E06A36" stroke-width="2"/>
-      <!-- правая (белая) половина -->
-      <path d="M110 40 a30 30 0 0 0 -30 -30 h-20 v60 h20 a30 30 0 0 0 30 -30 z" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="2"/>
-      <!-- стык -->
-      <line x1="60" y1="10" x2="60" y2="70" stroke="#E06A36" stroke-width="1.5" stroke-dasharray="2 3"/>
-      <!-- глаза -->
-      <circle cx="34" cy="36" r="4" fill="#2A1F1F" class="eye eye-left"/>
-      <path d="M48 36 q4 -4 8 0" stroke="#2A1F1F" stroke-width="2.5" fill="none" stroke-linecap="round" class="eye eye-right"/>
-      <!-- щёчки -->
-      <circle cx="26" cy="44" r="3" fill="#FF9E9E" opacity="0.7"/>
-      <circle cx="50" cy="44" r="3" fill="#FF9E9E" opacity="0.7"/>
-      <!-- улыбка -->
-      <path d="M34 46 q6 6 14 0" stroke="#2A1F1F" stroke-width="2" fill="none" stroke-linecap="round"/>
-    </svg>
-  </div>
-
-  <header class="topbar">
-    <h1>💊 Пилюлькин День</h1>
-    <p class="tagline" id="tagline">Ты сегодня уже принял свои волшебные пилюли?</p>
+  <!-- ===== Шапка ===== -->
+  <header class="app-header">
+    <div class="header-row">
+      <div class="brand">
+        <div class="mascot" aria-hidden="true">
+          <svg viewBox="0 0 120 80" width="56" height="38">
+            <path d="M10 40 a30 30 0 0 1 30 -30 h20 v60 h-20 a30 30 0 0 1 -30 -30 z" fill="#3B9AE1" stroke="#2479B5" stroke-width="2"/>
+            <path d="M110 40 a30 30 0 0 0 -30 -30 h-20 v60 h20 a30 30 0 0 0 30 -30 z" fill="#FFFFFF" stroke="#D8E6EF" stroke-width="2"/>
+            <line x1="60" y1="10" x2="60" y2="70" stroke="#2479B5" stroke-width="1.5" stroke-dasharray="2 3"/>
+            <circle cx="34" cy="36" r="4" fill="#1E2A3A" class="eye eye-left"/>
+            <path d="M48 36 q4 -4 8 0" stroke="#1E2A3A" stroke-width="2.5" fill="none" stroke-linecap="round" class="eye eye-right"/>
+            <circle cx="26" cy="44" r="3" fill="#FF9E9E" opacity="0.7"/>
+            <circle cx="50" cy="44" r="3" fill="#FF9E9E" opacity="0.7"/>
+            <path d="M34 46 q6 6 14 0" stroke="#1E2A3A" stroke-width="2" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Пилюлькин День</h1>
+          <p class="tagline" id="tagline">Ты сегодня уже принял свои волшебные пилюли?</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="streak-badge" title="Дней без пропуска">🔥 <span id="streakNum">0</span></div>
+        <div class="progress-ring" title="Прогресс за сегодня">
+          <svg width="56" height="56" viewBox="0 0 56 56">
+            <circle cx="28" cy="28" r="24" fill="none" stroke="#D8E6EF" stroke-width="6"/>
+            <circle id="ringProgress" cx="28" cy="28" r="24" fill="none" stroke="#3B9AE1" stroke-width="6" stroke-linecap="round" stroke-dasharray="150.8" stroke-dashoffset="150.8" transform="rotate(-90 28 28)"/>
+          </svg>
+          <span class="ring-text" id="ringText">0%</span>
+        </div>
+      </div>
+    </div>
   </header>
 
-  <!-- Подсказка для нового пользователя -->
+  <!-- ===== Горизонтальный календарь ===== -->
+  <section class="calendar-wrap">
+    <div class="cal-header">
+      <span id="calMonth">—</span>
+      <button class="cal-today-btn" id="todayBtn">Сегодня</button>
+    </div>
+    <div class="calendar" id="calendar"></div>
+  </section>
+
+  <!-- ===== Сводка выбранного дня ===== -->
+  <section class="day-summary" id="daySummary">
+    <div class="summary-text" id="summaryText">—</div>
+    <div class="summary-bar"><div class="summary-fill" id="summaryFill"></div></div>
+  </section>
+
+  <!-- ===== Подсказка ===== -->
   <section class="hint" id="hint">
-    👉 Добавь первую таблетку и нажми <b>«Напомнить мне»</b>.
+    👉 Добавь первую таблетку и нажми <b>«＋»</b> внизу.
   </section>
 
-  <!-- Счётчик дней без пропуска -->
-  <section class="streak">
-    <div class="streak-num" id="streakNum">0</div>
-    <div class="streak-label">дней без пропуска 🔥</div>
-  </section>
-
-  <!-- Кнопка добавить -->
-  <button class="btn btn-primary fab" id="addBtn">＋ Добавить таблетку</button>
-
-  <!-- Список таблеток -->
+  <!-- ===== Список таблеток ===== -->
   <main class="list" id="list"></main>
 
-  <!-- Кнопка установки на рабочий стол -->
+  <!-- ===== Плавающая кнопка добавить ===== -->
+  <button class="fab" id="addBtn" aria-label="Добавить таблетку">＋</button>
+
+  <!-- ===== Установка / уведомления ===== -->
   <section class="install-section">
     <button class="btn btn-ghost" id="installBtn" hidden>📱 Добавить на рабочий стол</button>
     <details class="install-help">
       <summary>Как добавить на рабочий стол Android?</summary>
       <ol>
-        <li>Открой это приложение в <b>Chrome</b> на Android.</li>
-        <li>Нажми на меню (три точки в правом верхнем углу).</li>
+        <li>Открой приложение в <b>Chrome</b> на Android.</li>
+        <li>Нажми меню (три точки в правом верхнем углу).</li>
         <li>Выбери <b>«Добавить на главный экран»</b> (или «Установить приложение»).</li>
-        <li>Подтверди — иконка появится на рабочем столе, а уведомления будут работать даже когда вкладка закрыта.</li>
+        <li>Подтверди — иконка появится на рабочем столе.</li>
       </ol>
     </details>
   </section>
 
-  <!-- Инструкция, если уведомления заблокированы -->
   <section class="blocked" id="blockedInfo" hidden>
     <h3>🔕 Уведомления заблокированы</h3>
-    <p>Без них Пилюлькин не сможет подсказывать о приёме таблеток. Как включить:</p>
+    <p>Без них Пилюлькин не сможет подсказывать о приёме. Как включить:</p>
     <ol>
       <li>Нажми на значок замка 🔒 слева от адресной строки.</li>
       <li>Найди раздел <b>«Уведомления»</b> и выбери <b>«Разрешить»</b>.</li>
@@ -84,7 +101,7 @@
     <button class="btn btn-ghost" id="recheckBtn">Проверить снова</button>
   </section>
 
-  <!-- Модальное окно добавления/редактирования -->
+  <!-- ===== Модальное окно ===== -->
   <div class="modal" id="modal" hidden>
     <div class="modal-card">
       <h2 id="modalTitle">Новая таблетка</h2>
@@ -104,10 +121,7 @@
     </div>
   </div>
 
-  <!-- Toast для поощрительных сообщений -->
   <div class="toast" id="toast"></div>
-
-  <!-- Звук "дзынь" через WebAudio (без файла) -->
   <script src="app.js"></script>
 </body>
 </html>

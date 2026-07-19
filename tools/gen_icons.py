@@ -38,11 +38,11 @@ def blend(bg, fg, t):
 
 def make_icon(size):
     """Draw a rounded-square background (mint) with a smiling pill capsule."""
-    bg_top = (255, 224, 178, 255)      # warm peach
+    bg_top = (224, 242, 251, 255)      # light blue
     bg_bot = (176, 244, 222, 255)      # mint
-    cap_orange = (255, 138, 80, 255)
+    cap_orange = (59, 154, 225, 255)   # pleasant blue (kept var name)
     cap_white = (255, 255, 255, 255)
-    eye = (40, 30, 30, 255)
+    eye = (30, 40, 55, 255)
     cheek = (255, 150, 150, 255)
 
     pixels = []

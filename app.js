@@ -1,4 +1,4 @@
-/* ===== Пилюлькин День — app.js ===== */
+/* ===== Пилюлькин День — app.js (Medisafe-like) ===== */
 (function () {
   "use strict";
 
@@ -6,7 +6,6 @@
   const STREAK_KEY = "pillpals.streak.v1";
   const LAST_TAKEN_ALL_KEY = "pillpals.lastAllTaken.v1";
 
-  // Случайные фразы
   const TAGLINES = [
     "Ты сегодня уже принял свои волшебные пилюли?",
     "Пора подкрепиться витаминками! 🦸‍♂️",
@@ -21,10 +20,14 @@
     "Отлично! +1 к здоровью ✨",
     "Молодец! Таблетки счастливые 😊",
   ];
+  const MONTHS = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+  const DOW = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
 
   // DOM
   const $ = (id) => document.getElementById(id);
   const listEl = $("list");
+  const calendarEl = $("calendar");
+  const calMonthEl = $("calMonth");
   const modal = $("modal");
   const modalTitle = $("modalTitle");
   const nameInput = $("nameInput");
@@ -36,28 +39,41 @@
   const taglineEl = $("tagline");
   const blockedInfo = $("blockedInfo");
   const installBtn = $("installBtn");
+  const ringProgress = $("ringProgress");
+  const ringText = $("ringText");
+  const summaryText = $("summaryText");
+  const summaryFill = $("summaryFill");
 
   let editingId = null;
   let deferredPrompt = null;
+  let selectedDate = todayStr(); // выбранная в календаре дата
 
   /* ---------- Utils ---------- */
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
-  function todayStr() {
-    const d = new Date();
-    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function dateStr(d) {
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
   }
+  function todayStr() { return dateStr(new Date()); }
+  function parseDateStr(s) {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
   function nowHHMM() {
     const d = new Date();
-    return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    return pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
   function loadData() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
     catch { return []; }
   }
-  function saveData(arr) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+  function saveData(arr) { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+
+  function isTakenOn(pill, ds) {
+    return !!(pill.takenDates && pill.takenDates[ds]);
   }
 
   /* ---------- Streak ---------- */
@@ -66,36 +82,27 @@
     const last = localStorage.getItem(LAST_TAKEN_ALL_KEY);
     if (!raw) return 0;
     let n = parseInt(raw, 10) || 0;
-    // Если последний "полный день" был не сегодня и не вчера — обнуляем
     if (last && last !== todayStr()) {
-      const yest = new Date();
-      yest.setDate(yest.getDate() - 1);
-      const yestStr = yest.getFullYear() + "-" + String(yest.getMonth() + 1).padStart(2, "0") + "-" + String(yest.getDate()).padStart(2, "0");
-      if (last !== yestStr) n = 0;
+      const yest = addDays(new Date(), -1);
+      if (last !== dateStr(yest)) n = 0;
     }
     return n;
   }
-  function saveStreak(n) {
-    localStorage.setItem(STREAK_KEY, String(n));
-  }
-  function updateStreakDisplay() {
-    streakNum.textContent = loadStreak();
-  }
+  function saveStreak(n) { localStorage.setItem(STREAK_KEY, String(n)); }
+  function updateStreakDisplay() { streakNum.textContent = loadStreak(); }
   function recomputeStreak() {
     const pills = loadData();
     if (pills.length === 0) { updateStreakDisplay(); return; }
-    const allTaken = pills.every(p => (p.takenDates && p.takenDates[todayStr()]));
+    const today = todayStr();
+    const allTaken = pills.every(p => isTakenOn(p, today));
     if (allTaken) {
       const last = localStorage.getItem(LAST_TAKEN_ALL_KEY);
-      if (last !== todayStr()) {
+      if (last !== today) {
         const n = loadStreak() + 1;
         saveStreak(n);
-        localStorage.setItem(LAST_TAKEN_ALL_KEY, todayStr());
+        localStorage.setItem(LAST_TAKEN_ALL_KEY, today);
         showToast("🎉 Все таблетки приняты! Серия: " + n + " дн.");
       }
-    } else {
-      // если серия была, но сегодня ещё не всё принято — оставляем как есть до конца дня
-      // обнуляем только когда прошёл день без полного приёма (см. loadStreak)
     }
     updateStreakDisplay();
   }
@@ -109,7 +116,7 @@
     toastTimer = setTimeout(() => toastEl.classList.remove("show"), ms);
   }
 
-  /* ---------- Звук "дзынь" через WebAudio ---------- */
+  /* ---------- Звук "дзынь" ---------- */
   let audioCtx = null;
   function playDing() {
     try {
@@ -129,19 +136,98 @@
     } catch (e) { /* ignore */ }
   }
 
-  /* ---------- Render ---------- */
-  function render() {
+  /* ---------- Прогресс-кольцо (за сегодня) ---------- */
+  const RING_CIRC = 2 * Math.PI * 24; // ≈150.8
+  function updateRing() {
     const pills = loadData();
+    const today = todayStr();
+    const total = pills.length;
+    const taken = pills.filter(p => isTakenOn(p, today)).length;
+    const pct = total === 0 ? 0 : Math.round((taken / total) * 100);
+    ringText.textContent = pct + "%";
+    ringProgress.setAttribute("stroke-dashoffset", String(RING_CIRC * (1 - pct / 100)));
+  }
+
+  /* ---------- Сводка выбранного дня ---------- */
+  function updateSummary() {
+    const pills = loadData();
+    const total = pills.length;
+    const taken = pills.filter(p => isTakenOn(p, selectedDate)).length;
+    const d = parseDateStr(selectedDate);
+    const label = d.getDate() + " " + MONTHS[d.getMonth()].toLowerCase();
+    const isToday = selectedDate === todayStr();
+    let prefix = isToday ? "Сегодня" : label;
+    summaryText.textContent = prefix + ": принято " + taken + " из " + total;
+    summaryFill.style.width = (total === 0 ? 0 : (taken / total) * 100) + "%";
+  }
+
+  /* ---------- Календарь ---------- */
+  function dayStatus(ds) {
+    const pills = loadData();
+    if (pills.length === 0) return "none";
+    const taken = pills.filter(p => isTakenOn(p, ds)).length;
+    if (taken === 0) return "none";
+    if (taken >= pills.length) return "all";
+    return "some";
+  }
+
+  function renderCalendar() {
+    const today = todayStr();
+    const base = new Date();
+    calendarEl.innerHTML = "";
+    // окно: 14 дней назад .. 21 день вперёд
+    for (let i = -14; i <= 21; i++) {
+      const d = addDays(base, i);
+      const ds = dateStr(d);
+      const st = dayStatus(ds);
+      const cell = document.createElement("div");
+      cell.className = "cal-day " + st;
+      if (ds === today) cell.classList.add("today");
+      if (ds === selectedDate) cell.classList.add("selected");
+      cell.dataset.date = ds;
+      cell.innerHTML =
+        '<span class="dow">' + DOW[d.getDay()] + "</span>" +
+        '<span class="dnum">' + d.getDate() + "</span>" +
+        '<span class="dot"></span>';
+      cell.addEventListener("click", () => selectDate(ds));
+      calendarEl.appendChild(cell);
+    }
+    // подпись месяца
+    const md = parseDateStr(selectedDate);
+    calMonthEl.textContent = MONTHS[md.getMonth()] + " " + md.getFullYear();
+  }
+
+  function scrollCalendarToSelected() {
+    const cell = calendarEl.querySelector('.cal-day[data-date="' + selectedDate + '"]');
+    if (cell) {
+      // плавный скролл к центру
+      const left = cell.offsetLeft - calendarEl.clientWidth / 2 + cell.clientWidth / 2;
+      calendarEl.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+    }
+  }
+
+  function selectDate(ds) {
+    selectedDate = ds;
+    renderCalendar();
+    render();
+    updateSummary();
+  }
+
+  /* ---------- Список таблеток ---------- */
+  function render() {
+    const pills = loadData().slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
     listEl.innerHTML = "";
     if (pills.length === 0) {
       hintEl.classList.remove("hidden");
-      listEl.innerHTML = '<div class="empty">Пока нет ни одной таблетки.<br>Нажми «＋ Добавить таблетку»! 💊</div>';
+      listEl.innerHTML = '<div class="empty">Пока нет ни одной таблетки.<br>Нажми «＋» внизу, чтобы добавить! 💊</div>';
+      updateRing();
+      updateSummary();
       return;
     }
     hintEl.classList.add("hidden");
-    const today = todayStr();
+    const isToday = selectedDate === todayStr();
     pills.forEach(p => {
-      const taken = !!(p.takenDates && p.takenDates[today]);
+      const taken = isTakenOn(p, selectedDate);
       const card = document.createElement("div");
       card.className = "card " + (taken ? "taken" : "pending");
       card.dataset.id = p.id;
@@ -157,7 +243,7 @@
       name.textContent = p.name || "Без названия";
       const meta = document.createElement("p");
       meta.className = "meta";
-      meta.textContent = p.dose ? "Дозировка: " + p.dose : "";
+      meta.textContent = p.dose ? p.dose : "";
       const time = document.createElement("span");
       time.className = "time";
       time.textContent = "⏰ " + (p.time || "--:--");
@@ -170,26 +256,21 @@
 
       const takeBtn = document.createElement("button");
       takeBtn.className = "take-btn" + (taken ? " taken" : "");
-      takeBtn.textContent = taken ? "Принято" : "Выпил!";
+      takeBtn.textContent = taken ? "✓ Принято" : "Выпил!";
       takeBtn.addEventListener("click", (e) => onTake(p.id, e));
 
       const rowBtns = document.createElement("div");
-      rowBtns.style.display = "flex";
-      rowBtns.style.gap = "4px";
-      rowBtns.style.justifyContent = "center";
-
+      rowBtns.className = "card-row";
       const editBtn = document.createElement("button");
       editBtn.className = "icon-btn";
       editBtn.textContent = "✏️";
       editBtn.title = "Редактировать";
       editBtn.addEventListener("click", () => openModal(p.id));
-
       const delBtn = document.createElement("button");
       delBtn.className = "icon-btn";
       delBtn.textContent = "🗑️";
       delBtn.title = "Удалить";
       delBtn.addEventListener("click", () => onDelete(p.id));
-
       rowBtns.appendChild(editBtn);
       rowBtns.appendChild(delBtn);
 
@@ -201,24 +282,26 @@
       card.appendChild(actions);
       listEl.appendChild(card);
     });
+
     recomputeStreak();
+    updateRing();
+    updateSummary();
+    renderCalendar();
   }
 
-  /* ---------- Actions ---------- */
+  /* ---------- Действия ---------- */
   function onTake(id, evt) {
     const pills = loadData();
     const p = pills.find(x => x.id === id);
     if (!p) return;
-    const today = todayStr();
     p.takenDates = p.takenDates || {};
-    const wasTaken = !!p.takenDates[today];
-    p.takenDates[today] = !wasTaken ? { at: Date.now() } : null;
-    // сбрасываем флаг уведомления на сегодня
-    if (!wasTaken) p.lastNotified = null;
+    const wasTaken = !!p.takenDates[selectedDate];
+    p.takenDates[selectedDate] = !wasTaken ? { at: Date.now() } : null;
+    // сброс флага уведомления только при отметке за сегодня
+    if (!wasTaken && selectedDate === todayStr()) p.lastNotified = todayStr();
     saveData(pills);
 
     if (!wasTaken) {
-      // анимация звёздочек
       spawnSparks(evt.currentTarget);
       playDing();
       showToast(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
@@ -239,8 +322,6 @@
       const dist = 40 + Math.random() * 30;
       s.style.setProperty("--dx", Math.cos(ang) * dist + "px");
       s.style.setProperty("--dy", Math.sin(ang) * dist + "px");
-      s.style.position = "fixed";
-      s.style.zIndex = "70";
       document.body.appendChild(s);
       setTimeout(() => s.remove(), 750);
     }
@@ -248,12 +329,11 @@
 
   function onDelete(id) {
     if (!confirm("Удалить эту таблетку?")) return;
-    const pills = loadData().filter(p => p.id !== id);
-    saveData(pills);
+    saveData(loadData().filter(p => p.id !== id));
     render();
   }
 
-  /* ---------- Modal ---------- */
+  /* ---------- Модальное окно ---------- */
   function openModal(id) {
     editingId = id || null;
     if (id) {
@@ -266,18 +346,14 @@
       modalTitle.textContent = "Новая таблетка";
       nameInput.value = "";
       doseInput.value = "";
-      // дефолтное время — ближайший целый час
       const d = new Date();
       d.setHours(d.getHours() + 1, 0, 0, 0);
-      timeInput.value = String(d.getHours()).padStart(2, "0") + ":00";
+      timeInput.value = pad(d.getHours()) + ":00";
     }
     modal.hidden = false;
     setTimeout(() => nameInput.focus(), 50);
   }
-  function closeModal() {
-    modal.hidden = true;
-    editingId = null;
-  }
+  function closeModal() { modal.hidden = true; editingId = null; }
   function onSave() {
     const name = nameInput.value.trim();
     const dose = doseInput.value.trim();
@@ -297,12 +373,9 @@
     showToast("Сохранено! 💾");
   }
 
-  /* ---------- Notifications ---------- */
+  /* ---------- Уведомления ---------- */
   function updateBlockedInfo() {
-    if (!("Notification" in window)) {
-      blockedInfo.hidden = false;
-      return;
-    }
+    if (!("Notification" in window)) { blockedInfo.hidden = false; return; }
     blockedInfo.hidden = Notification.permission !== "denied";
   }
   async function requestNotifPermission() {
@@ -331,11 +404,8 @@
       data: { url: location.href, id: pill.id },
       vibrate: [200, 100, 200],
     };
-    if (reg && reg.showNotification) {
-      reg.showNotification(title, options);
-    } else if (Notification.permission === "granted") {
-      new Notification(title, options);
-    }
+    if (reg && reg.showNotification) reg.showNotification(title, options);
+    else if (Notification.permission === "granted") new Notification(title, options);
     playDing();
   }
 
@@ -345,15 +415,11 @@
     const now = nowHHMM();
     let changed = false;
     pills.forEach(p => {
-      const taken = !!(p.takenDates && p.takenDates[today]);
-      if (taken) return;
-      if (p.time && p.time <= now) {
-        // уведомляем раз в день
-        if (p.lastNotified !== today) {
-          p.lastNotified = today;
-          changed = true;
-          fireNotification(p);
-        }
+      if (isTakenOn(p, today)) return;
+      if (p.time && p.time <= now && p.lastNotified !== today) {
+        p.lastNotified = today;
+        changed = true;
+        fireNotification(p);
       }
     });
     if (changed) saveData(pills);
@@ -363,11 +429,8 @@
   function registerSW() {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(err => console.warn("SW registration failed", err));
-      // клик по уведомлению -> фокус/открыть
       navigator.serviceWorker.addEventListener("message", (event) => {
-        if (event.data && event.data.type === "notif-click") {
-          window.focus();
-        }
+        if (event.data && event.data.type === "notif-click") window.focus();
       });
     }
   }
@@ -394,7 +457,7 @@
     showToast("Установлено! Теперь работает как приложение 🎉");
   });
 
-  /* ---------- Tagline rotation ---------- */
+  /* ---------- Tagline ---------- */
   function rotateTagline() {
     let i = 0;
     taglineEl.textContent = TAGLINES[i];
@@ -404,28 +467,33 @@
     }, 12000);
   }
 
-  /* ---------- Reset taken at new day ---------- */
+  /* ---------- Смена дня ---------- */
+  let lastDay = todayStr();
   function maybeNewDayReset() {
-    // takenDates хранятся по датам, поэтому "сброс" происходит автоматически —
-    // мы просто перерисовываем и пересчитываем серию.
+    const t = todayStr();
+    if (t !== lastDay) {
+      lastDay = t;
+      selectedDate = t;
+    }
     render();
   }
 
   /* ---------- Init ---------- */
   function init() {
-    // кнопки
     $("addBtn").addEventListener("click", () => openModal());
     $("cancelBtn").addEventListener("click", closeModal);
     $("saveBtn").addEventListener("click", onSave);
     $("recheckBtn").addEventListener("click", updateBlockedInfo);
+    $("todayBtn").addEventListener("click", () => {
+      selectedDate = todayStr();
+      render();
+      setTimeout(scrollCalendarToSelected, 50);
+    });
     modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
-    // запрос разрешения при первом запуске (после взаимодействия)
     const askOnce = () => {
       requestNotifPermission();
-      document.removeEventListener("click", askOnce);
-      document.removeEventListener("touchstart", askOnce);
     };
     document.addEventListener("click", askOnce, { once: true });
     document.addEventListener("touchstart", askOnce, { once: true });
@@ -434,15 +502,12 @@
     rotateTagline();
     render();
     updateBlockedInfo();
+    setTimeout(scrollCalendarToSelected, 80);
 
-    // планировщик уведомлений — пока вкладка открыта
     checkSchedule();
-    setInterval(checkSchedule, 30000); // каждые 30 сек
-
-    // проверка смены дня — каждую минуту перерисовать
+    setInterval(checkSchedule, 30000);
     setInterval(maybeNewDayReset, 60000);
 
-    // обрабатываем параметр ?action=add
     const params = new URLSearchParams(location.search);
     if (params.get("action") === "add") openModal();
   }
