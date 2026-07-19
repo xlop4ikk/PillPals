@@ -6,6 +6,15 @@
   const STREAK_KEY = "pillpals.streak.v1";
   const LAST_TAKEN_ALL_KEY = "pillpals.lastAllTaken.v1";
 
+  // === НАСТРОЙКА PUSH-СЕРВЕРА ===
+  // Адрес твоего Cloudflare Worker (замени на свой после деплоя).
+  // Оставь пустым "", если push-сервер не настроен — приложение будет работать
+  // только с локальными уведомлениями (пока вкладка открыта).
+  const PUSH_SERVER = "https://pillpals-push.YOUR-SUBDOMAIN.workers.dev";
+  // VAPID публичный ключ (из tools/gen_vapid.js / wrangler.toml)
+  const VAPID_PUBLIC_KEY = "BD99UbpcIjoqoETo16XTj-DmOL8xEOJ3Ux4gNUoBg-BsKChmO3389UfUTbZ-FKk_SJ4jfUJYg1u4t9jEzxtAJoo";
+  const PUSH_SUB_KEY = "pillpals.pushSub.v1";
+
   const TAGLINES = [
     "Ты сегодня уже принял свои волшебные пилюли?",
     "Пора подкрепиться витаминками! 🦸‍♂️",
@@ -329,6 +338,20 @@
       showToast(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
     }
     render();
+    syncAfterChange();
+  }
+
+  // Синхронизация расписания с push-сервером (debounce)
+  let syncTimer = null;
+  function syncAfterChange() {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) await syncToServer(sub);
+      } catch (e) { /* ignore */ }
+    }, 800);
   }
 
   function spawnSparks(btn) {
@@ -353,6 +376,7 @@
     if (!confirm("Удалить эту таблетку?")) return;
     saveData(loadData().filter(p => p.id !== id));
     render();
+    syncAfterChange();
   }
 
   /* ---------- Модальное окно ---------- */
@@ -414,6 +438,7 @@
     closeModal();
     render();
     showToast("Сохранено! 💾");
+    syncAfterChange();
   }
 
   /* ---------- Уведомления ---------- */
@@ -428,7 +453,11 @@
     }
     if (Notification.permission === "default") {
       const res = await Notification.requestPermission();
-      if (res === "granted") showToast("Уведомления включены! 🎉");
+      if (res === "granted") {
+        showToast("Уведомления включены! 🎉");
+        // подключаем фоновый push
+        await subscribePush();
+      }
       updateBlockedInfo();
     } else {
       updateBlockedInfo();
@@ -468,7 +497,7 @@
     if (changed) saveData(pills);
   }
 
-  /* ---------- Service Worker ---------- */
+  /* ---------- Service Worker + Push ---------- */
   function registerSW() {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(err => console.warn("SW registration failed", err));
@@ -476,6 +505,73 @@
         if (event.data && event.data.type === "notif-click") window.focus();
       });
     }
+  }
+
+  // Конвертация VAPID public key (base64url) -> Uint8Array для subscribe
+  function urlB64ToUint8Array(b64url) {
+    const pad = "=".repeat((4 - (b64url.length % 4)) % 4);
+    const b64 = (b64url + pad).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(b64);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  }
+
+  // Подписка на push + отправка расписания на сервер
+  async function subscribePush() {
+    if (!PUSH_SERVER || !VAPID_PUBLIC_KEY) return; // сервер не настроен
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      }
+      localStorage.setItem(PUSH_SUB_KEY, JSON.stringify(sub));
+      await syncToServer(sub);
+      showToast("🔔 Фоновые уведомления включены!");
+    } catch (e) {
+      console.warn("Push subscribe failed", e);
+      // не критично — локальные уведомления продолжат работать
+    }
+  }
+
+  // Отправка/обновление расписания на сервере
+  async function syncToServer(sub) {
+    if (!PUSH_SERVER) return;
+    try {
+      const pills = loadData();
+      const tzOffsetMin = new Date().getTimezoneOffset(); // мин (для Москвы = -180)
+      await fetch(PUSH_SERVER + "/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription: sub, pills, tzOffsetMin }),
+      });
+    } catch (e) {
+      console.warn("syncToServer failed", e);
+    }
+  }
+
+  // Отписка (при удалении всех данных и т.п.)
+  async function unsubscribePush() {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        if (PUSH_SERVER) {
+          await fetch(PUSH_SERVER + "/api/unregister", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          }).catch(() => {});
+        }
+        await sub.unsubscribe();
+      }
+      localStorage.removeItem(PUSH_SUB_KEY);
+    } catch (e) { /* ignore */ }
   }
 
   /* ---------- Install prompt ---------- */
@@ -547,6 +643,11 @@
     render();
     updateBlockedInfo();
     setTimeout(scrollCalendarToSelected, 80);
+
+    // Если уведомления уже разрешены — переподписываемся на push
+    if ("Notification" in window && Notification.permission === "granted") {
+      setTimeout(subscribePush, 1500);
+    }
 
     checkSchedule();
     setInterval(checkSchedule, 30000);

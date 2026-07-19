@@ -1,0 +1,19 @@
+name = "pillpals-push"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+
+# VAPID ключи — вставь свои значения (из `node tools/gen_vapid.js`)
+# ВАЖНО: не коммить реальный приватный ключ в публичный репозиторий!
+[vars]
+VAPID_PUBLIC_KEY = "BD99UbpcIjoqoETo16XTj-DmOL8xEOJ3Ux4gNUoBg-BsKChmO3389UfUTbZ-FKk_SJ4jfUJYg1u4t9jEzxtAJoo"
+VAPID_PRIVATE_JWK = '{"kty":"EC","x":"P31RulwiOiqgROjXpdOP4OY4vzEQ4ndTHiA1SgGD4Gw","y":"KChmO3389UfUTbZ-FKk_SJ4jfUJYg1u4t9jEzxtAJoo","crv":"P-256","d":"YYbIp3qeBggJaNui763KkQ0it6fWodiULOPWe7Axwrg"}'
+VAPID_SUBJECT = "mailto:you@example.com"
+
+# KV-хранилище для подписок и расписаний
+[[kv_namespaces]]
+binding = "PILLS"
+id = "ЗАМЕНИ_НА_СВОЙ_KV_ID"
+
+# Cron: проверяем напоминания каждые 2 минуты
+[triggers]
+crons = ["*/2 * * * *"]

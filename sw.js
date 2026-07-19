@@ -1,5 +1,5 @@
 /* ===== Пилюлькин День — Service Worker ===== */
-const CACHE = "pillpals-v3";
+const CACHE = "pillpals-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -66,10 +66,31 @@ self.addEventListener("notificationclick", (event) => {
 // Закрытие уведомления
 self.addEventListener("notificationclose", () => { /* no-op */ });
 
-// Периодическая фоновая синхронизация (где поддерживается) —
-// позволяет проверять напоминания даже при закрытой вкладке.
+// ===== Push: приходят фоновые уведомления от сервера =====
+self.addEventListener("push", (event) => {
+  let data = { title: "💊 Пилюлькин напоминает!", body: "Пора принять лекарство!" };
+  try {
+    if (event.data) {
+      const text = event.data.text();
+      try { data = JSON.parse(text); } catch { data.body = text; }
+    }
+  } catch (e) { /* ignore */ }
+
+  const options = {
+    body: data.body,
+    icon: "icons/icon-192.png",
+    badge: "icons/icon-192.png",
+    tag: data.tag || "pillpals-push",
+    data: { url: data.url || "./index.html" },
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+  };
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+// Периодическая фоновая синхронизация (где поддерживается)
 self.addEventListener("periodicsync", (event) => {
   if (event.tag === "pillpals-check") {
-    event.waitUntil(self.registration.showNotification ? Promise.resolve() : Promise.resolve());
+    event.waitUntil(Promise.resolve());
   }
 });
