@@ -10,7 +10,7 @@
   // Адрес твоего Cloudflare Worker (замени на свой после деплоя).
   // Оставь пустым "", если push-сервер не настроен — приложение будет работать
   // только с локальными уведомлениями (пока вкладка открыта).
-  const PUSH_SERVER = "https://pillpals-push.YOUR-SUBDOMAIN.workers.dev";
+  const PUSH_SERVER = "https://pillpals-push.xatabeach42.workers.dev";
   // VAPID публичный ключ (из tools/gen_vapid.js / wrangler.toml)
   const VAPID_PUBLIC_KEY = "BD99UbpcIjoqoETo16XTj-DmOL8xEOJ3Ux4gNUoBg-BsKChmO3389UfUTbZ-FKk_SJ4jfUJYg1u4t9jEzxtAJoo";
   const PUSH_SUB_KEY = "pillpals.pushSub.v1";
