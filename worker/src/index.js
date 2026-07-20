@@ -65,81 +65,85 @@ async function vapidAuth(endpoint, env) {
 
 // ===== Шифрование payload по RFC 8291 (aes128gcm) =====
 async function encryptPayload(message, subscription) {
-  const enc = new TextEncoder();
-  const plaintext = enc.encode(message);
+  try {
+    const enc = new TextEncoder();
+    const plaintext = enc.encode(message);
 
-  // Ключи подписки
-  const clientPub = b64urlToBuf(subscription.keys.p256dh);
-  const authSecret = b64urlToBuf(subscription.keys.auth);
+    // Ключи подписки
+    const clientPub = b64urlToBuf(subscription.keys.p256dh);
+    const authSecret = b64urlToBuf(subscription.keys.auth);
 
-  // Эфемерная ключевая пара сервера (P-256)
-  const ephPair = await crypto.subtle.generateKey(
-    { name: "ECDH", namedCurve: "P-256" },
-    true, ["deriveBits"]
-  );
-  const ephPubRaw = new Uint8Array(
-    await crypto.subtle.exportKey("raw", ephPair.publicKey)
-  );
+    // Эфемерная ключевая пара сервера (P-256)
+    const ephPair = await crypto.subtle.generateKey(
+      { name: "ECDH", namedCurve: "P-256" },
+      true, ["deriveBits"]
+    );
+    const ephPubRaw = new Uint8Array(
+      await crypto.subtle.exportKey("raw", ephPair.publicKey)
+    );
 
-  // Импорт публичного ключа клиента
-  const clientKey = await crypto.subtle.importKey(
-    "raw", clientPub,
-    { name: "ECDH", namedCurve: "P-256" },
-    false, []
-  );
-  // Shared secret
-  const sharedBits = await crypto.subtle.deriveBits(
-    { name: "ECDH", public: clientKey }, ephPair.privateKey, 256
-  );
-  const sharedSecret = new Uint8Array(sharedBits);
+    // Импорт публичного ключа клиента
+    const clientKey = await crypto.subtle.importKey(
+      "raw", clientPub,
+      { name: "ECDH", namedCurve: "P-256" },
+      false, []
+    );
+    // Shared secret
+    const sharedBits = await crypto.subtle.deriveBits(
+      { name: "ECDH", public: clientKey }, ephPair.privateKey, 256
+    );
+    const sharedSecret = new Uint8Array(sharedBits);
 
-  // HKDF: PRK = HKDF-Extract(auth, sharedSecret)
-  const prk = await hkdfExtract(authSecret, sharedSecret);
+    // HKDF: PRK = HKDF-Extract(auth, sharedSecret)
+    const prk = await hkdfExtract(authSecret, sharedSecret);
 
-  // key info = "WebPush: info\0" + clientPub + ephPub
-  const keyInfo = new Uint8Array(15 + clientPub.length + ephPubRaw.length);
-  keyInfo.set(enc.encode("WebPush: info\0"), 0);
-  keyInfo.set(clientPub, 15);
-  keyInfo.set(ephPubRaw, 15 + clientPub.length);
+    // key info = "WebPush: info\0" + clientPub + ephPub
+    const keyInfo = new Uint8Array(15 + clientPub.length + ephPubRaw.length);
+    keyInfo.set(enc.encode("WebPush: info\0"), 0);
+    keyInfo.set(clientPub, 15);
+    keyInfo.set(ephPubRaw, 15 + clientPub.length);
 
-  // content key (16) и nonce (12)
-  const cek = await hkdfExpand(prk, enc.encode("Content-Encoding: aes128gcm\0"), 16);
-  const nonce = await hkdfExpand(prk, enc.encode("Content-Encoding: nonce\0"), 12);
+    // content key (16) и nonce (12)
+    const cek = await hkdfExpand(prk, enc.encode("Content-Encoding: aes128gcm\0"), 16);
+    const nonce = await hkdfExpand(prk, enc.encode("Content-Encoding: nonce\0"), 12);
 
-  // Запись: plaintext + padding (0x02, rs=4096)
-  const rs = 4096;
-  const record = new Uint8Array(plaintext.length + 1);
-  record.set(plaintext, 0);
-  record[plaintext.length] = 2; // padding delimiter
+    // Запись: plaintext + padding (0x02, rs=4096)
+    const rs = 4096;
+    const record = new Uint8Array(plaintext.length + 1);
+    record.set(plaintext, 0);
+    record[plaintext.length] = 2; // padding delimiter
 
-  // AES-GCM
-  const aesKey = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["encrypt"]);
-  const encrypted = new Uint8Array(
-    await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce, tagLength: 128 }, aesKey, record)
-  );
+    // AES-GCM
+    const aesKey = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["encrypt"]);
+    const encrypted = new Uint8Array(
+      await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce, tagLength: 128 }, aesKey, record)
+    );
 
-  // Заголовок: salt(16) + rs(4 BE) + idlen(1) + keyid(ephPub 65) + ciphertext
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const header = new Uint8Array(21 + ephPubRaw.length);
-  header.set(salt, 0);
-  const dv = new DataView(header.buffer);
-  dv.setUint32(16, rs, false);
-  header[20] = ephPubRaw.length;
-  header.set(ephPubRaw, 21);
+    // Заголовок: salt(16) + rs(4 BE) + idlen(1) + keyid(ephPub 65) + ciphertext
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const header = new Uint8Array(21 + ephPubRaw.length);
+    header.set(salt, 0);
+    const dv = new DataView(header.buffer);
+    dv.setUint32(16, rs, false);
+    header[20] = ephPubRaw.length;
+    header.set(ephPubRaw, 21);
 
-  const out = new Uint8Array(header.length + encrypted.length);
-  out.set(header, 0);
-  out.set(encrypted, header.length);
-  return out;
+    const out = new Uint8Array(header.length + encrypted.length);
+    out.set(header, 0);
+    out.set(encrypted, header.length);
+    return out;
+  } catch (e) {
+    throw new Error("encryptPayload failed: " + e.message);
+  }
 }
 
 // HKDF helpers (Web Crypto)
+// HKDF-Extract(salt, IKM) = HMAC-SHA256(salt, IKM) — делаем вручную,
+// чтобы избежать проблем с "missing field info" в Cloudflare Workers.
 async function hkdfExtract(salt, ikm) {
-  const key = await crypto.subtle.importKey("raw", ikm, { name: "HKDF" }, false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt }, key, 256
-  );
-  return new Uint8Array(bits);
+  const key = await crypto.subtle.importKey("raw", salt, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", key, ikm);
+  return new Uint8Array(mac);
 }
 async function hkdfExpand(prk, info, length) {
   // Web Crypto HKDF expand не разделён, делаем вручную через HMAC
@@ -166,7 +170,18 @@ async function hkdfExpand(prk, info, length) {
 
 // ===== Отправка push =====
 async function sendPush(subscription, message, env) {
-  const payload = await encryptPayload(message, subscription);
+  let payload;
+  try {
+    payload = await encryptPayload(message, subscription);
+  } catch (e) {
+    // Сохраняем ошибку для отладки
+    await env.PILLS.put("debug:lastEncryptError", JSON.stringify({
+      error: e.message,
+      time: new Date().toISOString(),
+      hasKeys: !!(subscription.keys && subscription.keys.p256dh && subscription.keys.auth),
+    }));
+    throw e;
+  }
   const auth = await vapidAuth(subscription.endpoint, env);
   const resp = await fetch(subscription.endpoint, {
     method: "POST",
@@ -179,6 +194,15 @@ async function sendPush(subscription, message, env) {
     },
     body: payload,
   });
+  // Сохраняем результат для отладки
+  const respBody = await resp.text().catch(() => "");
+  await env.PILLS.put("debug:lastPushResult", JSON.stringify({
+    status: resp.status,
+    statusText: resp.statusText,
+    body: respBody.slice(0, 300),
+    time: new Date().toISOString(),
+    endpoint: subscription.endpoint.slice(0, 80),
+  }));
   return resp;
 }
 
@@ -238,7 +262,18 @@ async function handleRequest(request, env) {
         });
       } catch {}
     }
-    return json({ ok: true, count: subs.length, subscriptions: subs });
+    // Дополнительно: последняя ошибка шифрования
+    let lastErr = null;
+    try {
+      const errRaw = await env.PILLS.get("debug:lastEncryptError");
+      if (errRaw) lastErr = JSON.parse(errRaw);
+    } catch {}
+    let lastPush = null;
+    try {
+      const pushRaw = await env.PILLS.get("debug:lastPushResult");
+      if (pushRaw) lastPush = JSON.parse(pushRaw);
+    } catch {}
+    return json({ ok: true, count: subs.length, subscriptions: subs, lastEncryptError: lastErr, lastPushResult: lastPush });
   }
 
   // === Тестовый push: POST /api/test-push ===
