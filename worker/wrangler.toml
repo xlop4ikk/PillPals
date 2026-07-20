@@ -2,11 +2,11 @@ name = "pillpals-push"
 main = "src/index.js"
 compatibility_date = "2024-09-01"
 
-# VAPID ключи — вставь свои значения (из `node tools/gen_vapid.js`)
-# ВАЖНО: не коммить реальный приватный ключ в публичный репозиторий!
+# VAPID ключи — сгенерированы заново
+# ВАЖНО: не коммить в публичный репозиторий!
 [vars]
-VAPID_PUBLIC_KEY = "BD99UbpcIjoqoETo16XTj-DmOL8xEOJ3Ux4gNUoBg-BsKChmO3389UfUTbZ-FKk_SJ4jfUJYg1u4t9jEzxtAJoo"
-VAPID_PRIVATE_JWK = '{"kty":"EC","x":"P31RulwiOiqgROjXpdOP4OY4vzEQ4ndTHiA1SgGD4Gw","y":"KChmO3389UfUTbZ-FKk_SJ4jfUJYg1u4t9jEzxtAJoo","crv":"P-256","d":"YYbIp3qeBggJaNui763KkQ0it6fWodiULOPWe7Axwrg"}'
+VAPID_PUBLIC_KEY = "BAuf6NlrKLlW2OAEYeXWrl-7xamHX5mIZqdwUfXiRQpzZjZo8Il9m-tR8cU1gFUN2oHc_JxkXklMUrKkLfDdQdQ"
+VAPID_PRIVATE_JWK = '{"kty":"EC","x":"C5_o2WsouVbY4ARh5dauX7vFqYdfmYhmp3BR9eJFCnM","y":"ZjZo8Il9m-tR8cU1gFUN2oHc_JxkXklMUrKkLfDdQdQ","crv":"P-256","d":"Xaw2pFZR5c0KNJhlR917I-6C0ymi6t4uE7QzzDqcFCs"}'
 VAPID_SUBJECT = "mailto:xatabeach42@gmail.com"
 
 # KV-хранилище для подписок и расписаний

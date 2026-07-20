@@ -12,7 +12,7 @@
   // только с локальными уведомлениями (пока вкладка открыта).
   const PUSH_SERVER = "https://pillpals-push.xatabeach42.workers.dev";
   // VAPID публичный ключ (из tools/gen_vapid.js / wrangler.toml)
-  const VAPID_PUBLIC_KEY = "BD99UbpcIjoqoETo16XTj-DmOL8xEOJ3Ux4gNUoBg-BsKChmO3389UfUTbZ-FKk_SJ4jfUJYg1u4t9jEzxtAJoo";
+  const VAPID_PUBLIC_KEY = "BAuf6NlrKLlW2OAEYeXWrl-7xamHX5mIZqdwUfXiRQpzZjZo8Il9m-tR8cU1gFUN2oHc_JxkXklMUrKkLfDdQdQ";
   const PUSH_SUB_KEY = "pillpals.pushSub.v1";
 
   const TAGLINES = [
