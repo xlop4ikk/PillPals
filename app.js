@@ -14,6 +14,7 @@
   // VAPID публичный ключ (из tools/gen_vapid.js / wrangler.toml)
   const VAPID_PUBLIC_KEY = "BAuf6NlrKLlW2OAEYeXWrl-7xamHX5mIZqdwUfXiRQpzZjZo8Il9m-tR8cU1gFUN2oHc_JxkXklMUrKkLfDdQdQ";
   const PUSH_SUB_KEY = "pillpals.pushSub.v1";
+  const VAPID_KEY_VERSION_KEY = "pillpals.vapidKeyVersion.v1";
 
   const TAGLINES = [
     "Ты сегодня уже принял свои волшебные пилюли?",
@@ -524,12 +525,32 @@
     try {
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
+
+      // Проверка: не изменился ли VAPID-ключ
+      const savedKeyVersion = localStorage.getItem(VAPID_KEY_VERSION_KEY);
+      if (sub && savedKeyVersion !== VAPID_PUBLIC_KEY) {
+        // Ключ сменился или первый запуск — удаляем старую подписку и создаём новую
+        console.log("VAPID key changed or first run, resubscribing");
+        try {
+          await fetch(PUSH_SERVER + "/api/unregister", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          }).catch(() => {});
+          await sub.unsubscribe();
+        } catch (e) { /* ignore */ }
+        sub = null;
+      }
+
       if (!sub) {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
         });
       }
+
+      // Сохраняем версию ключа
+      localStorage.setItem(VAPID_KEY_VERSION_KEY, VAPID_PUBLIC_KEY);
       localStorage.setItem(PUSH_SUB_KEY, JSON.stringify(sub));
       await syncToServer(sub);
       showToast("🔔 Фоновые уведомления включены!");
