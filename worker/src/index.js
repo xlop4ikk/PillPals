@@ -284,6 +284,9 @@ async function checkReminders(env) {
       rec.notifiedToday = rec.notifiedToday || {};
       for (const pill of (rec.pills || [])) {
         if (!pill.time) continue;
+        // Проверяем период действия
+        if (pill.dateStart && todayKey < pill.dateStart) continue;
+        if (pill.dateEnd && todayKey > pill.dateEnd) continue;
         if (pill.takenDates && pill.takenDates[todayKey]) continue;
         if (pill.time > userHHMM) continue;
         const nk = pill.id + ":" + todayKey;

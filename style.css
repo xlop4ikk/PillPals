@@ -132,7 +132,25 @@ html, body {
   font-weight: 700;
   color: var(--ink);
   font-size: 0.92rem;
+  gap: 6px;
 }
+.cal-nav-btn {
+  background: var(--blue-light);
+  color: var(--blue-dark);
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cal-nav-btn:active { transform: scale(0.9); }
+.cal-header > span { flex: 1; text-align: center; }
 .cal-today-btn {
   background: var(--blue-light);
   color: var(--blue-dark);
@@ -500,6 +518,32 @@ html, body {
   margin-top: 8px;
 }
 .modal-actions .btn { flex: 1; }
+
+/* Период приёма */
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.date-range input {
+  flex: 1;
+  margin-top: 0 !important;
+  padding: 10px 12px !important;
+  font-size: 0.9rem !important;
+}
+.date-range-sep {
+  color: var(--muted);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.date-range-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.76rem;
+  font-weight: 400;
+  color: var(--muted);
+}
 
 /* Сетка выбора типа лекарства */
 .type-grid {

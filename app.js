@@ -71,11 +71,16 @@
   const summaryText = $("summaryText");
   const summaryFill = $("summaryFill");
   const typeGrid = $("typeGrid");
+  const dateStartInput = $("dateStartInput");
+  const dateEndInput = $("dateEndInput");
+  const calPrev = $("calPrev");
+  const calNext = $("calNext");
 
   let editingId = null;
   let deferredPrompt = null;
   let selectedDate = todayStr(); // выбранная в календаре дата
   let selectedType = "tablet";   // выбранный тип лекарства в модалке
+  let calCenterDate = new Date(); // центр горизонтального календаря
 
   /* ---------- Utils ---------- */
   function uid() {
@@ -105,6 +110,14 @@
     return !!(pill.takenDates && pill.takenDates[ds]);
   }
 
+  function isPillActiveOnDate(pill, ds) {
+    // Если не указан период — активно всегда
+    if (!pill.dateStart && !pill.dateEnd) return true;
+    if (pill.dateStart && ds < pill.dateStart) return false;
+    if (pill.dateEnd && ds > pill.dateEnd) return false;
+    return true;
+  }
+
   /* ---------- Streak ---------- */
   function loadStreak() {
     const raw = localStorage.getItem(STREAK_KEY);
@@ -123,7 +136,9 @@
     const pills = loadData();
     if (pills.length === 0) { updateStreakDisplay(); return; }
     const today = todayStr();
-    const allTaken = pills.every(p => isTakenOn(p, today));
+    const active = pills.filter(p => isPillActiveOnDate(p, today));
+    if (active.length === 0) { updateStreakDisplay(); return; }
+    const allTaken = active.every(p => isTakenOn(p, today));
     if (allTaken) {
       const last = localStorage.getItem(LAST_TAKEN_ALL_KEY);
       if (last !== today) {
@@ -170,8 +185,9 @@
   function updateRing() {
     const pills = loadData();
     const today = todayStr();
-    const total = pills.length;
-    const taken = pills.filter(p => isTakenOn(p, today)).length;
+    const active = pills.filter(p => isPillActiveOnDate(p, today));
+    const total = active.length;
+    const taken = active.filter(p => isTakenOn(p, today)).length;
     const pct = total === 0 ? 0 : Math.round((taken / total) * 100);
     ringText.textContent = pct + "%";
     ringProgress.setAttribute("stroke-dashoffset", String(RING_CIRC * (1 - pct / 100)));
@@ -180,8 +196,9 @@
   /* ---------- Сводка выбранного дня ---------- */
   function updateSummary() {
     const pills = loadData();
-    const total = pills.length;
-    const taken = pills.filter(p => isTakenOn(p, selectedDate)).length;
+    const active = pills.filter(p => isPillActiveOnDate(p, selectedDate));
+    const total = active.length;
+    const taken = active.filter(p => isTakenOn(p, selectedDate)).length;
     const d = parseDateStr(selectedDate);
     const label = d.getDate() + " " + MONTHS[d.getMonth()].toLowerCase();
     const isToday = selectedDate === todayStr();
@@ -192,7 +209,7 @@
 
   /* ---------- Календарь ---------- */
   function dayStatus(ds) {
-    const pills = loadData();
+    const pills = loadData().filter(p => isPillActiveOnDate(p, ds));
     if (pills.length === 0) return "none";
     const taken = pills.filter(p => isTakenOn(p, ds)).length;
     if (taken === 0) return "none";
@@ -202,10 +219,10 @@
 
   function renderCalendar() {
     const today = todayStr();
-    const base = new Date();
+    const base = calCenterDate; // центр календаря
     calendarEl.innerHTML = "";
-    // окно: 14 дней назад .. 21 день вперёд
-    for (let i = -14; i <= 21; i++) {
+    // Показываем 35 дней: 17 назад, 17 вперёд, 1 центр
+    for (let i = -17; i <= 17; i++) {
       const d = addDays(base, i);
       const ds = dateStr(d);
       const st = dayStatus(ds);
@@ -222,8 +239,7 @@
       calendarEl.appendChild(cell);
     }
     // подпись месяца
-    const md = parseDateStr(selectedDate);
-    calMonthEl.textContent = MONTHS[md.getMonth()] + " " + md.getFullYear();
+    calMonthEl.textContent = MONTHS[base.getMonth()] + " " + base.getFullYear();
   }
 
   function scrollCalendarToSelected() {
@@ -237,6 +253,12 @@
 
   function selectDate(ds) {
     selectedDate = ds;
+    // Если выбранная дата вне окна календаря — сдвигаем центр
+    const sel = parseDateStr(ds);
+    const diff = Math.round((sel - calCenterDate) / 86400000);
+    if (diff < -17 || diff > 17) {
+      calCenterDate = sel;
+    }
     renderCalendar();
     render();
     updateSummary();
@@ -245,6 +267,8 @@
   /* ---------- Список таблеток ---------- */
   function render() {
     const pills = loadData().slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    // Фильтруем: показываем только таблетки, активные на выбранную дату
+    const activePills = pills.filter(p => isPillActiveOnDate(p, selectedDate));
     listEl.innerHTML = "";
     if (pills.length === 0) {
       hintEl.classList.remove("hidden");
@@ -254,8 +278,15 @@
       return;
     }
     hintEl.classList.add("hidden");
+    if (activePills.length === 0) {
+      // Есть таблетки, но ни одна не активна на эту дату
+      listEl.innerHTML = '<div class="empty">📅 На эту дату нет активных препаратов.<br>Добавь новую таблетку или измени период у существующей.</div>';
+      updateRing();
+      updateSummary();
+      return;
+    }
     const isToday = selectedDate === todayStr();
-    pills.forEach(p => {
+    activePills.forEach(p => {
       const taken = isTakenOn(p, selectedDate);
       const card = document.createElement("div");
       card.className = "card " + (taken ? "taken" : "pending");
@@ -275,6 +306,11 @@
       const parts = [];
       if (p.type && p.type !== "other") parts.push(typeLabel(p.type));
       if (p.dose) parts.push(p.dose);
+      // Показываем период, если задан
+      if (p.dateStart && p.dateEnd) {
+        const fmt = (s) => s.slice(8,10) + "." + s.slice(5,7) + "." + s.slice(0,4);
+        parts.push(fmt(p.dateStart) + "–" + fmt(p.dateEnd));
+      }
       meta.textContent = parts.join(" · ");
       const time = document.createElement("span");
       time.className = "time";
@@ -408,11 +444,15 @@
       nameInput.value = p.name || "";
       doseInput.value = p.dose || "";
       timeInput.value = p.time || "";
+      dateStartInput.value = p.dateStart || "";
+      dateEndInput.value = p.dateEnd || "";
       selectType(p.type || "tablet");
     } else {
       modalTitle.textContent = "Новое лекарство";
       nameInput.value = "";
       doseInput.value = "";
+      dateStartInput.value = "";
+      dateEndInput.value = "";
       const d = new Date();
       d.setHours(d.getHours() + 1, 0, 0, 0);
       timeInput.value = pad(d.getHours()) + ":00";
@@ -426,14 +466,20 @@
     const name = nameInput.value.trim();
     const dose = doseInput.value.trim();
     const time = timeInput.value;
+    const dateStart = dateStartInput.value || null;
+    const dateEnd = dateEndInput.value || null;
     if (!name) { showToast("Введи название лекарства 🙏"); nameInput.focus(); return; }
     if (!time) { showToast("Выбери время ⏰"); return; }
+    if (dateStart && dateEnd && dateStart > dateEnd) {
+      showToast("Начало периода позже конца 📅"); return;
+    }
     const pills = loadData();
     if (editingId) {
       const p = pills.find(x => x.id === editingId);
       p.name = name; p.dose = dose; p.time = time; p.type = selectedType;
+      p.dateStart = dateStart; p.dateEnd = dateEnd;
     } else {
-      pills.push({ id: uid(), name, dose, time, type: selectedType, takenDates: {}, lastNotified: null });
+      pills.push({ id: uid(), name, dose, time, type: selectedType, dateStart, dateEnd, takenDates: {}, lastNotified: null });
     }
     saveData(pills);
     closeModal();
@@ -665,6 +711,7 @@
     if (t !== lastDay) {
       lastDay = t;
       selectedDate = t;
+      calCenterDate = new Date();
     }
     render();
   }
@@ -678,8 +725,17 @@
     $("testPushBtn").addEventListener("click", testPush);
     $("todayBtn").addEventListener("click", () => {
       selectedDate = todayStr();
+      calCenterDate = new Date();
       render();
       setTimeout(scrollCalendarToSelected, 50);
+    });
+    calPrev.addEventListener("click", () => {
+      calCenterDate = addDays(calCenterDate, -30);
+      renderCalendar();
+    });
+    calNext.addEventListener("click", () => {
+      calCenterDate = addDays(calCenterDate, 30);
+      renderCalendar();
     });
     modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });

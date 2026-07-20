@@ -53,7 +53,9 @@
   <!-- ===== Горизонтальный календарь ===== -->
   <section class="calendar-wrap">
     <div class="cal-header">
+      <button class="cal-nav-btn" id="calPrev">‹</button>
       <span id="calMonth">—</span>
+      <button class="cal-nav-btn" id="calNext">›</button>
       <button class="cal-today-btn" id="todayBtn">Сегодня</button>
     </div>
     <div class="calendar" id="calendar"></div>
@@ -126,6 +128,14 @@
       </label>
       <label>Время приёма
         <input type="time" id="timeInput" />
+      </label>
+      <label>Период приёма
+        <div class="date-range">
+          <input type="date" id="dateStartInput" />
+          <span class="date-range-sep">—</span>
+          <input type="date" id="dateEndInput" />
+        </div>
+        <span class="date-range-hint">Оставь пустым для ежедневного приёма</span>
       </label>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="cancelBtn">Отмена</button>
