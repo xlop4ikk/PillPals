@@ -574,6 +574,37 @@
     } catch (e) { /* ignore */ }
   }
 
+  /* ---------- Тестовая кнопка push ---------- */
+  async function testPush() {
+    if (!PUSH_SERVER) { showToast("Push-сервер не настроен 🙁"); return; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        showToast("Нет подписки на push. Разреши уведомления сначала 🔔");
+        // пытаемся подписаться
+        await subscribePush();
+        showToast("Попробуй ещё раз через 3 секунды");
+        return;
+      }
+      showToast("⏳ Отправляем тестовый push…");
+      const resp = await fetch(PUSH_SERVER + "/api/test-push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "🔔 Тестовый push от Пилюлькина! Если ты это видишь — всё работает! 🎉" }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        showToast("✅ Push отправлен! Закрой приложение и жди");
+      } else {
+        showToast("❌ Ошибка: " + (data.error || data.statusText));
+        console.warn("test-push response", data);
+      }
+    } catch (e) {
+      showToast("❌ Ошибка: " + e.message);
+    }
+  }
+
   /* ---------- Install prompt ---------- */
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
@@ -623,6 +654,7 @@
     $("cancelBtn").addEventListener("click", closeModal);
     $("saveBtn").addEventListener("click", onSave);
     $("recheckBtn").addEventListener("click", updateBlockedInfo);
+    $("testPushBtn").addEventListener("click", testPush);
     $("todayBtn").addEventListener("click", () => {
       selectedDate = todayStr();
       render();

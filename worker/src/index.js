@@ -204,7 +204,7 @@ async function handleRequest(request, env) {
         notifiedToday: {},
       };
       await env.PILLS.put(key, JSON.stringify(record));
-      return json({ ok: true });
+      return json({ ok: true, msg: "subscribed" });
     } catch (e) {
       return json({ error: String(e) }, 400);
     }
@@ -215,9 +215,58 @@ async function handleRequest(request, env) {
       const body = await request.json();
       const key = "sub:" + body.endpoint;
       await env.PILLS.delete(key);
-      return json({ ok: true });
+      return json({ ok: true, msg: "unsubscribed" });
     } catch (e) {
       return json({ error: String(e) }, 400);
+    }
+  }
+
+  // === Отладка: сколько подписок ===
+  if (url.pathname === "/api/debug" && request.method === "GET") {
+    const list = await env.PILLS.list({ prefix: "sub:" });
+    const subs = [];
+    for (const item of list.keys) {
+      const raw = await env.PILLS.get(item.name);
+      if (!raw) continue;
+      try {
+        const rec = JSON.parse(raw);
+        subs.push({
+          endpoint: rec.subscription.endpoint.slice(0, 60) + "...",
+          pills: (rec.pills || []).map(p => p.name + " @" + (p.time || "?")),
+          tzOffsetMin: rec.tzOffsetMin,
+          updatedAt: new Date(rec.updatedAt).toISOString(),
+        });
+      } catch {}
+    }
+    return json({ ok: true, count: subs.length, subscriptions: subs });
+  }
+
+  // === Тестовый push: POST /api/test-push ===
+  // Тело: { "message": "Тестовое уведомление!" }
+  // Отправит push первому найденному подписчику
+  if (url.pathname === "/api/test-push" && request.method === "POST") {
+    try {
+      const body = await request.json();
+      const message = body.message || "Тестовое уведомление от Пилюлькина! 🎉";
+      const list = await env.PILLS.list({ prefix: "sub:" });
+      if (list.keys.length === 0) {
+        return json({ error: "no subscriptions found" }, 404);
+      }
+      const raw = await env.PILLS.get(list.keys[0].name);
+      if (!raw) return json({ error: "empty subscription" }, 500);
+      const rec = JSON.parse(raw);
+      const resp = await sendPush(rec.subscription, message, env);
+      const respBody = await resp.text().catch(() => "");
+      return json({
+        ok: resp.ok || resp.status === 201,
+        status: resp.status,
+        statusText: resp.statusText,
+        responseBody: respBody.slice(0, 200),
+        sentTo: rec.subscription.endpoint.slice(0, 60) + "...",
+        message,
+      });
+    } catch (e) {
+      return json({ error: String(e) }, 500);
     }
   }
 
@@ -242,9 +291,11 @@ async function checkReminders(env) {
     let rec;
     try { rec = JSON.parse(raw); } catch { continue; }
 
-    // Локальное время пользователя = UTC - tzOffsetMin
-    // (tzOffsetMin хранится как отрицательное смещение, напр. для Москвы +3 = -180)
-    const userNow = new Date(now.getTime() + (rec.tzOffsetMin || 0) * 60000);
+    // Локальное время пользователя.
+    // getTimezoneOffset() возвращает разницу UTC - local (в минутах).
+    // Для Москвы (UTC+3) = -180. Значит local = UTC - offset = UTC + 180.
+    const offset = rec.tzOffsetMin || 0;
+    const userNow = new Date(now.getTime() - offset * 60000);
     const todayKey = userNow.getFullYear() + "-" +
       String(userNow.getMonth() + 1).padStart(2, "0") + "-" +
       String(userNow.getDate()).padStart(2, "0");

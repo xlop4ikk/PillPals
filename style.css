@@ -433,6 +433,10 @@ html, body {
   font-weight: 700;
   color: var(--blue-dark);
 }
+#testPushBtn {
+  margin-top: 8px;
+  display: inline-block;
+}
 .blocked h3 { margin: 0 0 6px; color: #c0392b; }
 .blocked ol { padding-left: 18px; margin: 6px 0; }
 
