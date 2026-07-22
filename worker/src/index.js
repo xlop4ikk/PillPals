@@ -91,16 +91,27 @@ async function encryptPayload(message, subscription) {
   );
   const prk = new Uint8Array(await crypto.subtle.sign("HMAC", hmacKey, sharedBits));
 
-  // 5. key_info = "Content-Encoding: aes128gcm\0" + clientPub + ephPub
-  const label = "Content-Encoding: aes128gcm\0";
-  const labelBytes = enc.encode(label);
-  const keyInfo = new Uint8Array(labelBytes.length + clientPub.length + ephPub.length);
-  keyInfo.set(labelBytes, 0);
-  keyInfo.set(clientPub, labelBytes.length);
-  keyInfo.set(ephPub, labelBytes.length + clientPub.length);
+  // 5. key_info = "WebPush: info\0" + clientPub + ephPub
+  const webpushInfo = enc.encode("WebPush: info\0");
+  const keyInfo = new Uint8Array(webpushInfo.length + clientPub.length + ephPub.length);
+  keyInfo.set(webpushInfo, 0);
+  keyInfo.set(clientPub, webpushInfo.length);
+  keyInfo.set(ephPub, webpushInfo.length + clientPub.length);
 
-  // 6. CEK и nonce через HKDF-Expand (ручной HMAC)
-  async function hkdfExpandSalt(prk, info, len) {
+  // 6. CEK_info = "Content-Encoding: aes128gcm\0" + key_info
+  //    nonce_info = "Content-Encoding: nonce\0" + key_info
+  const cekLabel = enc.encode("Content-Encoding: aes128gcm\0");
+  const cekInfo = new Uint8Array(cekLabel.length + keyInfo.length);
+  cekInfo.set(cekLabel, 0);
+  cekInfo.set(keyInfo, cekLabel.length);
+
+  const nonceLabel = enc.encode("Content-Encoding: nonce\0");
+  const nonceInfo = new Uint8Array(nonceLabel.length + keyInfo.length);
+  nonceInfo.set(nonceLabel, 0);
+  nonceInfo.set(keyInfo, nonceLabel.length);
+
+  // 7. HKDF-Expand (ручной HMAC)
+  async function hkdfExpand(prk, info, len) {
     const k = await crypto.subtle.importKey("raw", prk, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     let T = new Uint8Array(0);
     let result = new Uint8Array(0);
@@ -119,10 +130,10 @@ async function encryptPayload(message, subscription) {
     return result.slice(0, len);
   }
 
-  const cek = await hkdfExpandSalt(prk, keyInfo, 16);
-  const nonce = await hkdfExpandSalt(prk, keyInfo, 12);
+  const cek = await hkdfExpand(prk, cekInfo, 16);
+  const nonce = await hkdfExpand(prk, nonceInfo, 12);
 
-  // 7. Шифруем AES-GCM
+  // 8. Шифруем AES-GCM
   const aesKey = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["encrypt"]);
   const record = new Uint8Array(plain.length + 1);
   record.set(plain, 0);

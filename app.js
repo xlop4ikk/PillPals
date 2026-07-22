@@ -12,7 +12,7 @@
   // только с локальными уведомлениями (пока вкладка открыта).
   const PUSH_SERVER = "https://pillpals-push.xatabeach42.workers.dev";
   // VAPID публичный ключ (из tools/gen_vapid.js / wrangler.toml)
-  const VAPID_PUBLIC_KEY = "BAuf6NlrKLlW2OAEYeXWrl-7xamHX5mIZqdwUfXiRQpzZjZo8Il9m-tR8cU1gFUN2oHc_JxkXklMUrKkLfDdQdQ";
+  const VAPID_PUBLIC_KEY = "BPvoMNF26fkQGP74PDFc1EzqCdd64ofRuJf592ByR6nJIzgLcC-ZLvZ_sP5MSzSZIMrTM6MSH36OOHamq_oYBU8";
   const PUSH_SUB_KEY = "pillpals.pushSub.v1";
   const VAPID_KEY_VERSION_KEY = "pillpals.vapidKeyVersion.v1";
 
@@ -80,7 +80,8 @@
   let deferredPrompt = null;
   let selectedDate = todayStr(); // выбранная в календаре дата
   let selectedType = "tablet";   // выбранный тип лекарства в модалке
-  let calCenterDate = new Date(); // центр горизонтального календаря
+  let calMonthDate = new Date(); // первый день показываемого месяца
+  calMonthDate.setDate(1);       // всегда 1-е число
 
   /* ---------- Utils ---------- */
   function uid() {
@@ -219,12 +220,37 @@
 
   function renderCalendar() {
     const today = todayStr();
-    const base = calCenterDate; // центр календаря
+    const year = calMonthDate.getFullYear();
+    const month = calMonthDate.getMonth();
+
+    // Первый день месяца (0=Вс, 1=Пн, ...)
+    const firstDay = new Date(year, month, 1);
+    const startDow = firstDay.getDay(); // 0=Вс
+    // Последнее число месяца
+    const lastDate = new Date(year, month + 1, 0).getDate();
+
     calendarEl.innerHTML = "";
-    // Показываем 35 дней: 17 назад, 17 вперёд, 1 центр
-    for (let i = -17; i <= 17; i++) {
-      const d = addDays(base, i);
-      const ds = dateStr(d);
+
+    // Шапка дней недели
+    const dowNames = ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"];
+    for (let i = 0; i < 7; i++) {
+      const header = document.createElement("div");
+      header.className = "cal-dow-header";
+      header.textContent = dowNames[i];
+      calendarEl.appendChild(header);
+    }
+
+    // Пустые ячейки до первого дня
+    for (let i = 0; i < startDow; i++) {
+      const empty = document.createElement("div");
+      empty.className = "cal-day other-month";
+      calendarEl.appendChild(empty);
+    }
+
+    // Дни месяца
+    for (let d = 1; d <= lastDate; d++) {
+      const date = new Date(year, month, d);
+      const ds = dateStr(date);
       const st = dayStatus(ds);
       const cell = document.createElement("div");
       cell.className = "cal-day " + st;
@@ -232,32 +258,22 @@
       if (ds === selectedDate) cell.classList.add("selected");
       cell.dataset.date = ds;
       cell.innerHTML =
-        '<span class="dow">' + DOW[d.getDay()] + "</span>" +
-        '<span class="dnum">' + d.getDate() + "</span>" +
+        '<span class="dnum">' + d + "</span>" +
         '<span class="dot"></span>';
       cell.addEventListener("click", () => selectDate(ds));
       calendarEl.appendChild(cell);
     }
-    // подпись месяца
-    calMonthEl.textContent = MONTHS[base.getMonth()] + " " + base.getFullYear();
-  }
 
-  function scrollCalendarToSelected() {
-    const cell = calendarEl.querySelector('.cal-day[data-date="' + selectedDate + '"]');
-    if (cell) {
-      // плавный скролл к центру
-      const left = cell.offsetLeft - calendarEl.clientWidth / 2 + cell.clientWidth / 2;
-      calendarEl.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
-    }
+    // подпись месяца
+    calMonthEl.textContent = MONTHS[month] + " " + year;
   }
 
   function selectDate(ds) {
     selectedDate = ds;
-    // Если выбранная дата вне окна календаря — сдвигаем центр
+    // Если выбранная дата в другом месяце — переключаем месяц
     const sel = parseDateStr(ds);
-    const diff = Math.round((sel - calCenterDate) / 86400000);
-    if (diff < -17 || diff > 17) {
-      calCenterDate = sel;
+    if (sel.getMonth() !== calMonthDate.getMonth() || sel.getFullYear() !== calMonthDate.getFullYear()) {
+      calMonthDate = new Date(sel.getFullYear(), sel.getMonth(), 1);
     }
     renderCalendar();
     render();
@@ -711,7 +727,8 @@
     if (t !== lastDay) {
       lastDay = t;
       selectedDate = t;
-      calCenterDate = new Date();
+      const td = parseDateStr(t);
+      calMonthDate = new Date(td.getFullYear(), td.getMonth(), 1);
     }
     render();
   }
@@ -725,16 +742,16 @@
     $("testPushBtn").addEventListener("click", testPush);
     $("todayBtn").addEventListener("click", () => {
       selectedDate = todayStr();
-      calCenterDate = new Date();
+      const td = new Date();
+      calMonthDate = new Date(td.getFullYear(), td.getMonth(), 1);
       render();
-      setTimeout(scrollCalendarToSelected, 50);
     });
     calPrev.addEventListener("click", () => {
-      calCenterDate = addDays(calCenterDate, -30);
+      calMonthDate = new Date(calMonthDate.getFullYear(), calMonthDate.getMonth() - 1, 1);
       renderCalendar();
     });
     calNext.addEventListener("click", () => {
-      calCenterDate = addDays(calCenterDate, 30);
+      calMonthDate = new Date(calMonthDate.getFullYear(), calMonthDate.getMonth() + 1, 1);
       renderCalendar();
     });
     modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
@@ -751,7 +768,6 @@
     rotateTagline();
     render();
     updateBlockedInfo();
-    setTimeout(scrollCalendarToSelected, 80);
 
     // Если уведомления уже разрешены — переподписываемся на push
     if ("Notification" in window && Notification.permission === "granted") {

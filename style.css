@@ -163,47 +163,46 @@ html, body {
 }
 .cal-today-btn:active { transform: scale(0.95); }
 .calendar {
-  display: flex;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
   padding: 6px 10px 12px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
 }
-.calendar::-webkit-scrollbar { height: 4px; }
-.calendar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+.cal-dow-header {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 4px 0;
+  text-transform: uppercase;
+}
 
 .cal-day {
-  flex-shrink: 0;
-  width: 46px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 7px 0 5px;
-  border-radius: 14px;
+  padding: 6px 0 4px;
+  border-radius: 12px;
   cursor: pointer;
-  scroll-snap-align: center;
   transition: background 0.15s ease, transform 0.1s ease;
   position: relative;
+  min-height: 44px;
 }
 .cal-day:active { transform: scale(0.93); }
-.cal-day .dow {
-  font-size: 0.68rem;
-  color: var(--muted);
-  font-weight: 600;
-  text-transform: uppercase;
+.cal-day.other-month {
+  opacity: 0.2;
+  pointer-events: none;
 }
 .cal-day .dnum {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--ink);
-  margin-top: 1px;
 }
 .cal-day .dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  margin-top: 4px;
+  margin-top: 3px;
   background: transparent;
 }
 .cal-day.some .dot { background: var(--mint); }
@@ -216,7 +215,6 @@ html, body {
 .cal-day.selected {
   background: var(--blue);
 }
-.cal-day.selected .dow,
 .cal-day.selected .dnum { color: #fff; }
 .cal-day.selected.some .dot,
 .cal-day.selected.all .dot { background: #fff; }
