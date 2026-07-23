@@ -82,6 +82,11 @@
   let selectedType = "tablet";   // выбранный тип лекарства в модалке
   let calMonthDate = new Date(); // первый день показываемого месяца
   calMonthDate.setDate(1);       // всегда 1-е число
+  
+  // Убедимся что selectedDate совпадает с todayStr()
+  if (selectedDate !== todayStr()) {
+    selectedDate = todayStr();
+  }
 
   /* ---------- Utils ---------- */
   function uid() {
@@ -204,8 +209,13 @@
     const label = d.getDate() + " " + MONTHS[d.getMonth()].toLowerCase();
     const isToday = selectedDate === todayStr();
     let prefix = isToday ? "Сегодня" : label;
-    summaryText.textContent = prefix + ": принято " + taken + " из " + total;
-    summaryFill.style.width = (total === 0 ? 0 : (taken / total) * 100) + "%";
+    if (total === 0) {
+      summaryText.textContent = prefix + " — добавь первую таблетку!";
+      summaryFill.style.width = "0%";
+    } else {
+      summaryText.textContent = prefix + ": принято " + taken + " из " + total;
+      summaryFill.style.width = (taken / total * 100) + "%";
+    }
   }
 
   /* ---------- Календарь ---------- */
@@ -219,6 +229,7 @@
   }
 
   function renderCalendar() {
+    if (!calendarEl) return;
     const today = todayStr();
     const year = calMonthDate.getFullYear();
     const month = calMonthDate.getMonth();
@@ -291,6 +302,7 @@
       listEl.innerHTML = '<div class="empty">Пока нет ни одной таблетки.<br>Нажми «＋» внизу, чтобы добавить! 💊</div>';
       updateRing();
       updateSummary();
+      renderCalendar();
       return;
     }
     hintEl.classList.add("hidden");
@@ -299,6 +311,7 @@
       listEl.innerHTML = '<div class="empty">📅 На эту дату нет активных препаратов.<br>Добавь новую таблетку или измени период у существующей.</div>';
       updateRing();
       updateSummary();
+      renderCalendar();
       return;
     }
     const isToday = selectedDate === todayStr();
@@ -766,6 +779,7 @@
     registerSW();
     buildTypeGrid();
     rotateTagline();
+    renderCalendar();
     render();
     updateBlockedInfo();
 
