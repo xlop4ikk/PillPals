@@ -163,12 +163,12 @@ async function sendPush(sub, msg, env) {
   try {
     payload = await encryptPayload(msg, sub);
   } catch (e) {
-    await env.PILLS.put("debug:lastError", JSON.stringify({
+    debugCache.lastError = {
       where: "encryptPayload",
       error: e.message,
       stack: e.stack,
       time: new Date().toISOString(),
-    }));
+    };
     throw e;
   }
 
@@ -186,14 +186,39 @@ async function sendPush(sub, msg, env) {
   });
 
   const respBody = await resp.text().catch(() => "");
-  await env.PILLS.put("debug:lastPushResult", JSON.stringify({
-    status: resp.status,
-    statusText: resp.statusText,
-    body: respBody.slice(0, 500),
-    time: new Date().toISOString(),
-  }));
+  // Сохраняем результат ТОЛЬКО при ошибке
+  if (resp.status !== 201 && !resp.ok) {
+    debugCache.lastPushResult = {
+      status: resp.status,
+      statusText: resp.statusText,
+      body: respBody.slice(0, 500),
+      time: new Date().toISOString(),
+    };
+  }
 
   return { resp, body: respBody };
+}
+
+// ===== Debug-кэш (в памяти, не трогает KV) =====
+let debugCache = {
+  lastError: null,
+  lastPushResult: null,
+  cronError: null,
+};
+
+// ===== Вспомогательная: запись в KV только при изменении =====
+let kvLastWritten = {};
+async function kvPutIfChanged(key, value) {
+  const now = Date.now();
+  const last = kvLastWritten[key];
+  // Не пишем чаще раза в 5 минут и только если значение изменилось
+  if (last && (now - last.time) < 300000 && last.value === value) return;
+  try {
+    await env.PILLS.put(key, value);
+    kvLastWritten[key] = { time: now, value };
+  } catch (e) {
+    console.warn("KV put failed:", key, e.message);
+  }
 }
 
 // ===== HTTP-обработчик =====
@@ -249,10 +274,14 @@ async function handleRequest(request, env) {
         });
       } catch {}
     }
-    let lastErr = null, lastPush = null;
-    try { const r = await env.PILLS.get("debug:lastError"); if (r) lastErr = JSON.parse(r); } catch {}
-    try { const r = await env.PILLS.get("debug:lastPushResult"); if (r) lastPush = JSON.parse(r); } catch {}
-    return json({ ok: true, count: subs.length, subscriptions: subs, lastError: lastErr, lastPushResult: lastPush });
+    return json({
+      ok: true,
+      count: subs.length,
+      subscriptions: subs,
+      lastError: debugCache.lastError,
+      lastPushResult: debugCache.lastPushResult,
+      cronError: debugCache.cronError,
+    });
   }
 
   if (url.pathname === "/api/test-push" && request.method === "POST") {
@@ -277,10 +306,13 @@ async function handleRequest(request, env) {
   return json({ error: "not found" }, 404);
 }
 
-// ===== Cron =====
+// ===== Cron (каждые 2 минуты) =====
 async function checkReminders(env) {
   const now = new Date();
   const list = await env.PILLS.list({ prefix: "sub:" });
+  
+  if (list.keys.length === 0) return;
+  
   for (const item of list.keys) {
     try {
       const rec = JSON.parse(await env.PILLS.get(item.name));
@@ -293,6 +325,8 @@ async function checkReminders(env) {
         String(userNow.getMinutes()).padStart(2, "0");
 
       rec.notifiedToday = rec.notifiedToday || {};
+      let changed = false;
+      
       for (const pill of (rec.pills || [])) {
         if (!pill.time) continue;
         // Проверяем период действия
@@ -307,25 +341,44 @@ async function checkReminders(env) {
         const result = await sendPush(rec.subscription, msg, env);
         if (result.resp.status === 410 || result.resp.status === 404) {
           await env.PILLS.delete(item.name);
+          changed = true;
           break;
         }
         if (result.resp.ok || result.resp.status === 201) {
           rec.notifiedToday[nk] = Date.now();
+          changed = true;
         }
       }
 
+      // Чистим старые флаги (оставляем только сегодня)
       const cleaned = {};
       for (const k in rec.notifiedToday) {
         if (k.endsWith(":" + todayKey)) cleaned[k] = rec.notifiedToday[k];
       }
       rec.notifiedToday = cleaned;
-      await env.PILLS.put(item.name, JSON.stringify(rec));
+
+      // Записываем в KV только если что-то изменилось
+      if (changed) {
+        await kvPutIfChanged(item.name, JSON.stringify(rec));
+      }
     } catch (e) {
-      await env.PILLS.put("debug:cronError", JSON.stringify({
+      debugCache.cronError = {
         error: e.message,
-        key: item.name,
         time: new Date().toISOString(),
-      }));
+      };
+    }
+  }
+  
+  // Раз в 10 минут сохраняем debug-кэш в KV (чтобы не потерять при перезапуске)
+  if (now.getMinutes() % 10 === 0) {
+    if (debugCache.lastError) {
+      await kvPutIfChanged("debug:lastError", JSON.stringify(debugCache.lastError));
+    }
+    if (debugCache.lastPushResult) {
+      await kvPutIfChanged("debug:lastPushResult", JSON.stringify(debugCache.lastPushResult));
+    }
+    if (debugCache.cronError) {
+      await kvPutIfChanged("debug:cronError", JSON.stringify(debugCache.cronError));
     }
   }
 }
